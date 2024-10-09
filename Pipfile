@@ -9,6 +9,7 @@ uvicorn = "*"
 motor = "*"
 passlib = {extras = ["brypt"], version = "*"}
 pyjwt = "*"
+pydantic-settings = "*"
 
 [dev-packages]
 pytest = "*"
