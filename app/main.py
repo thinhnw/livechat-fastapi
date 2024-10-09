@@ -68,5 +68,12 @@ async def login(
     return schemas.Token(access_token=access_token, token_type="bearer")
 
 
+@app.get("/auth/me")
+async def me(
+    user = Depends(oauth2.get_current_user),
+) -> schemas.UserResponse:
+    return user
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

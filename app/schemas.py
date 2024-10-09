@@ -23,7 +23,7 @@ class UserLogin(BaseModel):
 
 
 class UserResponse(BaseModelWithId):
-    pass
+    email: EmailStr
 
 
 class ChatRoom(BaseModelWithId):

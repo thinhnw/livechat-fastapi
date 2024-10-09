@@ -32,13 +32,13 @@ async def get_current_user(
         payload = jwt.decode(
             token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
         )
-        user_id: str | None = payload.get("user_id")
-        if user_id is None:
+        email: str | None = payload.get("email")
+        if email is None:
             raise credentials_exception
     except jwt.InvalidTokenError as e:
         raise credentials_exception
 
-    user = await db.users.find_one({"email": payload.email})
+    user = await db.users.find_one({"email": payload.get("email")})
     if user is None:
         raise credentials_exception
     return user
