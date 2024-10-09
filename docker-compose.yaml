@@ -1,0 +1,40 @@
+services:
+  mongo:
+    image: mongo
+    restart: always
+    volumes:
+      - ../data:/data
+    networks:
+      - root_traefik
+      - backend
+    ports:
+      - 27017:27017
+    env_file:
+      - db.env
+  
+
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile.dev
+    restart: always
+    volumes:
+      - .:/code
+    depends_on:
+      - mongo
+    networks:
+      - root_traefik
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.livechatfastapi.rule=Host(`livechat.thinhnw.site`)"
+      - "traefik.http.routers.livechatfastapi.entrypoints=websecure"
+      - "traefik.http.routers.livechatfastapi.tls=true"
+      - "traefik.http.routers.livechatfastapi.tls.certresolver=myresolver"
+      - "traefik.http.services.livechatfastapi.loadbalancer.server.port=8000"
+      - "traefik.docker.network=root_traefik"
+
+networks:
+  root_traefik:
+    external: true
+  backend:
