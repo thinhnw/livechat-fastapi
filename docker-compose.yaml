@@ -19,7 +19,7 @@ services:
       dockerfile: Dockerfile.dev
     restart: always
     volumes:
-      - .:/code
+      - .:/app
     depends_on:
       - mongo
     networks:
