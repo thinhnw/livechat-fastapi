@@ -1,3 +1,4 @@
+from enum import Enum
 from bson import ObjectId
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -26,8 +27,19 @@ class UserResponse(BaseModelWithId):
     email: EmailStr
 
 
+class ChatRoomTypeEnum(str, Enum):
+    DIRECT = "direct"
+    GROUP = "group"
+
+
 class ChatRoom(BaseModelWithId):
     name: str
+    type: ChatRoomTypeEnum
+
+
+class ChatRoomCreate(BaseModel):
+    name: str
+    type: ChatRoomTypeEnum
 
 
 class Token(BaseModel):

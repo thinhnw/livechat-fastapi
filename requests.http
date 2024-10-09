@@ -4,12 +4,8 @@
 GET {{API_URL}} 
 
 
-### GET /chat_rooms
-GET https://livechat.thinhnw.site/chat_rooms
-
-
 ### REGISTER, CREATE A USER
-POST https://livechat.thinhnw.site/auth/register
+POST {{API_URL}}/auth/register
 Accept: application/json
 
 {
@@ -30,7 +26,18 @@ Accept: application/json
 
 
 ### GET user_me
-GET {{API_URL}}/auth/me HTTP/1.1
+GET {{API_URL}}/auth/me 
 Content-Type: application/json
 Accept: application/json
 Authorization: Bearer {{authToken}}
+
+
+### Create a chat room
+POST {{API_URL}}/chat_rooms
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+    "name": "New Group",
+    "type": "group"
+}

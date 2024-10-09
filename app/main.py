@@ -70,9 +70,19 @@ async def login(
 
 @app.get("/auth/me")
 async def me(
-    user = Depends(oauth2.get_current_user),
+    user=Depends(oauth2.get_current_user),
 ) -> schemas.UserResponse:
     return user
+
+
+@app.post("/chat_rooms")
+async def create_chat_room(
+    payload: schemas.ChatRoomCreate, db=Depends(get_db), user=Depends(oauth2.get_current_user)
+):
+    chat_room = await db.chat_rooms.insert_one(
+        {**payload.model_dump(), "users": [user.get("email")]}
+    )
+    return str(chat_room.inserted_id)
 
 
 if __name__ == "__main__":
