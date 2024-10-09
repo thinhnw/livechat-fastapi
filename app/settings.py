@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     mongo_host: str
     mongo_port: int = 27017
     jwt_secret: str
+    jwt_algorithm: str = "HS256" 
+    jwt_token_ttl: int = 60 * 60
 
     @property
     def mongo_uri(self):

@@ -18,12 +18,22 @@ class UserCreate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    username: EmailStr
+    email: EmailStr
     password: str
 
 
 class UserResponse(BaseModelWithId):
     pass
 
+
 class ChatRoom(BaseModelWithId):
     name: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    user_id: str | None = None

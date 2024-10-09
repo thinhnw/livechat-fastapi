@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, status
 
-from app import schemas, utils
+from app import oauth2, schemas, utils
 from app.database import get_db
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -50,21 +50,22 @@ async def register(
     return str(res.inserted_id)
 
 
-# @app.post("/auth/login")
-# async def login(payload: schemas.UserLogin, db: AsyncIOMotorDatabase = Depends(get_db)):
-#     user = await db.users.find_one({"email": payload.email})
-#     if not user:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND, detail="Invalid Credentials"
-#         )
-#     if not utils.verify(payload.password, user["hashed_password"]):
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND, detail="Incorrect password"
-#         )
- 
-#     access_token = oauth2.create_access_token(data = {"user_id": user.id})
+@app.post("/auth/login")
+async def login(
+    payload: schemas.UserLogin, db: AsyncIOMotorDatabase = Depends(get_db)
+) -> schemas.Token:
+    user = await db.users.find_one({"email": payload.email})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invalid Credentials"
+        )
+    if not utils.verify(payload.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Incorrect password"
+        )
+    access_token = await oauth2.create_access_token(data={"email": user["email"]})
 
-#     return Token(access_token=access_token, token_type="bearer")
+    return schemas.Token(access_token=access_token, token_type="bearer")
 
 
 if __name__ == "__main__":

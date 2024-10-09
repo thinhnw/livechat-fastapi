@@ -6,8 +6,18 @@ GET https://livechat.thinhnw.site/
 GET https://livechat.thinhnw.site/chat_rooms
 
 
-### CREATE A USER
+### REGISTER, CREATE A USER
 POST https://livechat.thinhnw.site/auth/register
+Accept: application/json
+
+{
+    "email": "johndoe@example.com",
+    "password": "12345678"
+}
+
+
+### LOGIN
+POST https://livechat.thinhnw.site/auth/login
 Accept: application/json
 
 {
