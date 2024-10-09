@@ -2,9 +2,8 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, status
 
-from app import oauth2, schemas, utils
+from app import oauth2, utils
 from app.database import get_db
-from motor.motor_asyncio import AsyncIOMotorDatabase
 
 
 @asynccontextmanager
@@ -26,18 +25,8 @@ async def root():
     return {"message": "Hello You"}
 
 
-@app.get("/chat_rooms")
-async def get_chat_rooms(
-    db: AsyncIOMotorDatabase = Depends(get_db),
-) -> list[schemas.ChatRoom]:
-    chat_rooms = await db.chat_rooms.find().to_list(length=100)
-    return chat_rooms
-
-
 @app.post("/auth/register")
-async def register(
-    payload: schemas.UserCreate, db: AsyncIOMotorDatabase = Depends(get_db)
-) -> str:
+async def register(payload: dict, db=Depends(get_db)):
 
     existed = await db.users.find_one({"email": payload.email})
     if existed:
@@ -51,9 +40,7 @@ async def register(
 
 
 @app.post("/auth/login")
-async def login(
-    payload: schemas.UserLogin, db: AsyncIOMotorDatabase = Depends(get_db)
-) -> schemas.Token:
+async def login(payload: dict, db=Depends(get_db)):
     user = await db.users.find_one({"email": payload.email})
     if not user:
         raise HTTPException(
@@ -65,7 +52,7 @@ async def login(
         )
     access_token = await oauth2.create_access_token(data={"email": user["email"]})
 
-    return schemas.Token(access_token=access_token, token_type="bearer")
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 if __name__ == "__main__":
