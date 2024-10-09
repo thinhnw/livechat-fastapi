@@ -32,7 +32,7 @@ class ChatRoomTypeEnum(str, Enum):
     GROUP = "group"
 
 
-class ChatRoom(BaseModelWithId):
+class ChatRoomResponse(BaseModelWithId):
     name: str
     type: ChatRoomTypeEnum
 

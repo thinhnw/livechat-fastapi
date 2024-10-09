@@ -26,14 +26,6 @@ async def root():
     return {"message": "Hello You"}
 
 
-@app.get("/chat_rooms")
-async def get_chat_rooms(
-    db: AsyncIOMotorDatabase = Depends(get_db),
-) -> list[schemas.ChatRoom]:
-    chat_rooms = await db.chat_rooms.find().to_list(length=100)
-    return chat_rooms
-
-
 @app.post("/auth/register")
 async def register(
     payload: schemas.UserCreate, db: AsyncIOMotorDatabase = Depends(get_db)
@@ -77,12 +69,26 @@ async def me(
 
 @app.post("/chat_rooms")
 async def create_chat_room(
-    payload: schemas.ChatRoomCreate, db=Depends(get_db), user=Depends(oauth2.get_current_user)
+    payload: schemas.ChatRoomCreate,
+    db=Depends(get_db),
+    user=Depends(oauth2.get_current_user),
 ):
     chat_room = await db.chat_rooms.insert_one(
         {**payload.model_dump(), "users": [user.get("email")]}
     )
     return str(chat_room.inserted_id)
+
+
+@app.get("/chat_rooms")
+async def get_chat_rooms(
+    db=Depends(get_db),
+    user=Depends(oauth2.get_current_user),
+) -> list[schemas.ChatRoomResponse]:
+    print(user.get("email"))
+    chat_rooms = await db.chat_rooms.find(
+        {"users": {"$in": [user.get("email")]}}
+    ).to_list()
+    return chat_rooms
 
 
 if __name__ == "__main__":

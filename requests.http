@@ -41,3 +41,9 @@ Authorization: Bearer {{authToken}}
     "name": "New Group",
     "type": "group"
 }
+
+
+### Get user's chat rooms
+GET {{API_URL}}/chat_rooms
+Accept: application/json
+Authorization: Bearer {{authToken}}
