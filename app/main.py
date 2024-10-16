@@ -1,11 +1,12 @@
 from contextlib import asynccontextmanager
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, File, HTTPException, UploadFile, status
 
 from app import oauth2, schemas, utils
-from app.database import get_db
+from app.database import get_db, get_fs
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from datetime import datetime
+from gridfs import GridFS
 
 
 @asynccontextmanager
@@ -36,7 +37,7 @@ async def db_healthcheck(db: AsyncIOMotorDatabase = Depends(get_db)):
 @app.post("/auth/register")
 async def register(
     payload: schemas.UserCreate, db: AsyncIOMotorDatabase = Depends(get_db)
-) -> str:
+):
 
     existed = await db.users.find_one({"email": payload.email})
     if existed:
@@ -54,7 +55,7 @@ async def register(
     res = await db.users.insert_one(
         {"email": payload.email, "password_hash": utils.hash(payload.password)}
     )
-    return str(res.inserted_id)
+    return {"user_id": str(res.inserted_id)}
 
 
 @app.post("/auth/login")
@@ -82,13 +83,21 @@ async def me(
     return user
 
 
-# @app.patch("/users/{id}")
-# async def change_display_name(
-#     db=Depends(get_db),
-#     user=Depends(oauth2.get_current_user),
-#     payload: schemas.UserChangeDisplayName
-# ):
-
+@app.put("/users/{id}/avatar")
+async def change_display_name(
+    db=Depends(get_db),
+    fs=Depends(get_fs),
+    user=Depends(oauth2.get_current_user),
+    file: UploadFile = File(...),
+):
+    file_id = await fs.upload_from_stream(file.filename, file.file)
+    updated_result = await db.users.update_one(
+        {"_id": user.get("_id")}, {"$set": {"avatar_file_id": file_id}}
+    )
+    if updated_result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="User not found or no changes made")
+    print(str(file_id))
+    return {"file_id": str(file_id)}
 
 
 @app.post("/chat_rooms")
