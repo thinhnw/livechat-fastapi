@@ -1,11 +1,13 @@
 from typing import AsyncGenerator
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from app.settings import settings
+from app.config import settings
 
 
 client = AsyncIOMotorClient(settings.mongo_uri)
-db = client[settings.mongo_database]
+main_db = client[settings.mongo_maindb]
 
 
 async def get_db() -> AsyncGenerator[AsyncIOMotorDatabase, None]:
-    return db
+    return main_db
+
+

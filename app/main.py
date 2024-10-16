@@ -26,6 +26,13 @@ async def root():
     return {"message": "Hello You"}
 
 
+@app.get("/db")
+async def db_healthcheck(db: AsyncIOMotorDatabase = Depends(get_db)):
+    await db["healthcheck"].insert_one({"message": "OK"})
+    print("You successfully connected to MongoDB!")
+    return {"message": "OK"}
+
+
 @app.post("/auth/register")
 async def register(
     payload: schemas.UserCreate, db: AsyncIOMotorDatabase = Depends(get_db)
