@@ -5,6 +5,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from app import oauth2, schemas, utils
 from app.database import get_db
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from datetime import datetime
 
 
 @asynccontextmanager
@@ -28,8 +29,7 @@ async def root():
 
 @app.get("/db")
 async def db_healthcheck(db: AsyncIOMotorDatabase = Depends(get_db)):
-    await db["healthcheck"].insert_one({"message": "OK"})
-    print("You successfully connected to MongoDB!")
+    await db["healthcheck"].insert_one({"created_at": datetime.now()})
     return {"message": "OK"}
 
 
@@ -64,11 +64,11 @@ async def login(
     user = await db.users.find_one({"email": payload.email})
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Invalid Credentials"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Credentials"
         )
-    if not utils.verify(payload.password, user["hashed_password"]):
+    if not utils.verify(payload.password, user["password_hash"]):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Incorrect password"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Credentials"
         )
     access_token = await oauth2.create_access_token(data={"email": user["email"]})
 
