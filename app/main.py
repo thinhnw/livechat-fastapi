@@ -43,8 +43,16 @@ async def register(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists"
         )
+
+    if not utils.is_strong_password(payload.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters long and contain at "
+                "least one uppercase letter, one lowercase letter, one digit, "
+                "and one special character"
+        )
     res = await db.users.insert_one(
-        {"email": payload.email, "hashed_password": utils.hash(payload.password)}
+        {"email": payload.email, "password_hash": utils.hash(payload.password)}
     )
     return str(res.inserted_id)
 
