@@ -14,7 +14,7 @@ from .conftest import valid_email, valid_password, invalid_email, invalid_passwo
         (valid_email, None, status.HTTP_422_UNPROCESSABLE_ENTITY),
     ],
 )
-async def test_user_registration(client, test_db, email, password, status_code):
+async def test_registration(client, test_db, email, password, status_code):
     response = await client.post(
         "/auth/register", json={"email": email, "password": password}
     )
@@ -24,7 +24,7 @@ async def test_user_registration(client, test_db, email, password, status_code):
 
 
 @pytest.mark.anyio
-async def test_user_registration_with_existing_email(client, user_setup):
+async def test_registration_with_existing_email(client, user_setup):
     response = await client.post(
         "/auth/register", json={"email": valid_email, "password": valid_password}
     )
@@ -43,7 +43,7 @@ async def test_user_registration_with_existing_email(client, user_setup):
         (valid_email, None, 422),
     ],
 )
-async def test_user_login(client, user_setup, email, password, status_code):
+async def test_login(client, user_setup, email, password, status_code):
     response = await client.post(
         "/auth/login", json={"email": email, "password": password}
     )
