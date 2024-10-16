@@ -1,7 +1,8 @@
-from typing import AsyncGenerator
 import pytest
+from typing import AsyncGenerator
+from fastapi import status
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from app import utils
+from app import schemas, utils
 from app.config import settings
 from app.database import get_db
 from app.main import app
@@ -20,18 +21,18 @@ def anyio_backend():
 
 
 @pytest.fixture()
-async def test_db() -> AsyncGenerator[AsyncIOMotorDatabase, None]:
+async def testdb() -> AsyncGenerator[AsyncIOMotorDatabase, None]:
     client = AsyncIOMotorClient(settings.mongo_uri)
-    test_db = client[settings.mongo_testdb]
+    db = client[settings.mongo_testdb]
 
     await client.drop_database(settings.mongo_testdb)
-    return test_db
+    return db
 
 
 @pytest.fixture()
-def client(test_db):
+def client(testdb):
     async def override_get_db():
-        return test_db
+        return testdb
 
     app.dependency_overrides[get_db] = override_get_db
 
@@ -41,10 +42,30 @@ def client(test_db):
 
 
 @pytest.fixture
-async def user_setup(test_db):
-    await test_db.users.insert_one(
+async def sample_user(testdb):
+    await testdb.users.insert_one(
         {
             "email": valid_email,
             "password_hash": utils.hash(valid_password),
         }
     )
+    return await testdb.users.find_one({"email": valid_email})
+
+
+def get_access_token(email, password):
+
+    @pytest.fixture
+    async def login(client):
+        response = await client.post(
+            "/auth/login", json={"email": email, "password": password}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        return (
+            response.json()["access_token"],
+            response.json()["token_type"],
+        )
+
+    return login
+
+
+sample_user_token = get_access_token(valid_email, valid_password)

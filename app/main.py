@@ -48,8 +48,8 @@ async def register(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password must be at least 8 characters long and contain at "
-                "least one uppercase letter, one lowercase letter, one digit, "
-                "and one special character"
+            "least one uppercase letter, one lowercase letter, one digit, "
+            "and one special character",
         )
     res = await db.users.insert_one(
         {"email": payload.email, "password_hash": utils.hash(payload.password)}
@@ -72,7 +72,7 @@ async def login(
         )
     access_token = await oauth2.create_access_token(data={"email": user["email"]})
 
-    return schemas.Token(access_token=access_token, token_type="bearer")
+    return schemas.Token(access_token=access_token, token_type="Bearer")
 
 
 @app.get("/auth/me")
@@ -80,6 +80,15 @@ async def me(
     user=Depends(oauth2.get_current_user),
 ) -> schemas.UserResponse:
     return user
+
+
+# @app.patch("/users/{id}")
+# async def change_display_name(
+#     db=Depends(get_db),
+#     user=Depends(oauth2.get_current_user),
+#     payload: schemas.UserChangeDisplayName
+# ):
+
 
 
 @app.post("/chat_rooms")

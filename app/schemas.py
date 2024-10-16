@@ -18,6 +18,10 @@ class UserCreate(BaseModel):
     password: str
 
 
+class UserChangeDisplayName(BaseModel):
+    display_name: str
+
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
