@@ -10,6 +10,8 @@ motor = "*"
 passlib = {extras = ["brypt"], version = "*"}
 pyjwt = "*"
 pydantic-settings = "*"
+pytest = "*"
+pytest-cov = "*"
 
 [dev-packages]
 pytest = "*"
