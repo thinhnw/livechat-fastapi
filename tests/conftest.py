@@ -74,7 +74,17 @@ async def access_tokens():
     async def _access_tokens(users):
         result = []
         for user in users:
-            result.append(await oauth2.create_access_token(data={"email": user["email"]}))
+            result.append(
+                await oauth2.create_access_token(data={"email": user["email"]})
+            )
         return result
 
     return _access_tokens
+
+
+@pytest.fixture
+async def authorized_client(client, sample_users, access_tokens):
+    user = (await sample_users(1))[0]
+    access_token = (await access_tokens([user]))[0]
+    client.headers = {**client.headers, "Authorization": f"Bearer {access_token}"}
+    return {"client": client, "current_user": user, "access_token": access_token}

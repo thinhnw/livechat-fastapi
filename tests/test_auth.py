@@ -60,11 +60,9 @@ async def test_login_with_invalid_credentials(client, sample_users):
 
 
 @pytest.mark.anyio
-async def test_me(client, sample_users, access_tokens):
-    user = (await sample_users(1))[0]
-    token = (await access_tokens([user]))[0]
-    response = await client.get(
-        "/auth/me", headers={"Authorization": f"Bearer {token}"}
-    )
+async def test_me(authorized_client):
+    response = await authorized_client["client"].get("/auth/me")
     assert response.status_code == status.HTTP_200_OK
-    assert response.json().get("email") == user.get("email")
+    assert response.json().get("email") == authorized_client["current_user"].get(
+        "email"
+    )

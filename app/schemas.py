@@ -19,9 +19,10 @@ class UserLogin(BaseModel):
     password: str
 
 
-class UserResponse(BaseModel):
+class UserMeResponse(BaseModel):
     id: str = Field(..., alias="_id")
     email: EmailStr
+    display_name: str
     avatar_file_id: str | None = None 
 
     @field_validator('id', 'avatar_file_id', mode='before')
@@ -29,6 +30,10 @@ class UserResponse(BaseModel):
         if isinstance(value, ObjectId):
             return str(value)  # Convert to string if it's an ObjectId
         return value
+
+class UserDisplayResponse(BaseModel):
+    display_name: str 
+
 
 class ChatRoomTypeEnum(str, Enum):
     DIRECT = "direct"
