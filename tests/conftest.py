@@ -1,18 +1,19 @@
 import pytest
 from typing import AsyncGenerator
 from fastapi import status
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorGridFSBucket
-from app import schemas, utils
+from motor.motor_asyncio import (
+    AsyncIOMotorClient,
+    AsyncIOMotorDatabase,
+    AsyncIOMotorGridFSBucket,
+)
+from app import oauth2, schemas, utils
 from app.config import settings
 from app.database import get_db, get_fs
 from app.main import app
 from httpx import ASGITransport, AsyncClient
 
-valid_email = "foo@bar.com"
-valid_password = "Foobar1!"
 
-invalid_email = "foobar"
-invalid_password = "foobar"
+password = "Foobar1!"
 
 
 @pytest.fixture
@@ -35,11 +36,11 @@ async def testfs(testdb) -> AsyncGenerator[AsyncIOMotorGridFSBucket, None]:
 
 
 @pytest.fixture()
-def client(testdb, testfs):
-    async def override_get_db():
+async def client(testdb, testfs):
+    def override_get_db():
         return testdb
 
-    async def override_get_fs():
+    def override_get_fs():
         return testfs
 
     app.dependency_overrides[get_db] = override_get_db
@@ -51,30 +52,29 @@ def client(testdb, testfs):
 
 
 @pytest.fixture
-async def sample_user(testdb):
-    await testdb.users.insert_one(
-        {
-            "email": valid_email,
-            "password_hash": utils.hash(valid_password),
-        }
-    )
-    return await testdb.users.find_one({"email": valid_email})
+async def sample_users(testdb):
+    async def _sample_users_data(count=1):
+        users_data = []
+        for i in range(count):
+            users_data.append(
+                {
+                    "email": f"user_{i}@foobar.com",
+                    "password_hash": utils.hash("Foobar1!"),
+                    "display_name": f"User {i}",
+                }
+            )
+        await testdb.users.insert_many(users_data)
+        return await testdb.users.find().to_list(length=count)
+
+    return _sample_users_data
 
 
-def get_access_token(email, password):
+@pytest.fixture
+async def access_tokens():
+    async def _access_tokens(users):
+        result = []
+        for user in users:
+            result.append(await oauth2.create_access_token(data={"email": user["email"]}))
+        return result
 
-    @pytest.fixture
-    async def login(client):
-        response = await client.post(
-            "/auth/login", json={"email": email, "password": password}
-        )
-        assert response.status_code == status.HTTP_200_OK
-        return (
-            response.json()["access_token"],
-            response.json()["token_type"],
-        )
-
-    return login
-
-
-sample_user_token = get_access_token(valid_email, valid_password)
+    return _access_tokens

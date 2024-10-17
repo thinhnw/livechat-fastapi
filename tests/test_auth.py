@@ -1,60 +1,70 @@
 import pytest
 from fastapi import status
-from .conftest import valid_email, valid_password, invalid_email, invalid_password
+
+from app import oauth2
+from .conftest import password
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(
-    "email, password, status_code",
-    [
-        (valid_email, valid_password, status.HTTP_200_OK),
-        (valid_email, invalid_password, status.HTTP_400_BAD_REQUEST),
-        (invalid_email, valid_password, status.HTTP_422_UNPROCESSABLE_ENTITY),
-        (None, invalid_password, status.HTTP_422_UNPROCESSABLE_ENTITY),
-        (valid_email, None, status.HTTP_422_UNPROCESSABLE_ENTITY),
-    ],
-)
-async def test_registration(client, testdb, email, password, status_code):
+async def test_registration_with_valid_credentials(client, testdb):
+    email = "foo@bar.com"
     response = await client.post(
         "/auth/register", json={"email": email, "password": password}
     )
-    assert response.status_code == status_code
+    assert response.status_code == status.HTTP_200_OK
     user = await testdb.users.find_one({"email": email})
-    assert user if status_code == status.HTTP_200_OK else not user
+    assert user
 
 
 @pytest.mark.anyio
-async def test_registration_with_existing_email(client, sample_user):
+async def test_registration_with_existing_email(client, sample_users):
+    user = (await sample_users(1))[0]
     response = await client.post(
-        "/auth/register", json={"email": valid_email, "password": valid_password}
+        "/auth/register", json={"email": user["email"], "password": password}
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json().get("detail") == "Email already exists"
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(
-    "email, password, status_code",
-    [
-        (valid_email, valid_password, 200),
-        (valid_email + "typo", invalid_password, 401),
-        (valid_email, invalid_password, 401),
-        (invalid_email, valid_password, 422),
-        (None, invalid_password, 422),
-        (valid_email, None, 422),
-    ],
-)
-async def test_login(client, sample_user, email, password, status_code):
+@pytest.mark.parametrize("invalid_password", ["foo", "12345678", "Abcdefgh1"])
+async def test_registration_with_invalid_password(client, invalid_password):
     response = await client.post(
-        "/auth/login", json={"email": email, "password": password}
+        "/auth/register", json={"email": "foo@bar.com", "password": invalid_password}
     )
-    assert response.status_code == status_code
-    if status_code == status.HTTP_200_OK:
-        assert "access_token" in response.json()
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json().get("detail") == (
+        "Password must be at least 8 characters long and contain at "
+        "least one uppercase letter, one lowercase letter, one digit, "
+        "and one special character"
+    )
 
 
 @pytest.mark.anyio
-async def test_me(client, sample_user, sample_user_token):
-    response = await client.get("/auth/me", headers={"Authorization": f"Bearer {sample_user_token[0]}"})
+async def test_login_with_valid_credentials(client, sample_users):
+    user = (await sample_users(1))[0]
+    response = await client.post(
+        "/auth/login", data={"username": user["email"], "password": password}
+    )
     assert response.status_code == status.HTTP_200_OK
-    assert response.json().get("email") == sample_user.get("email")
+    assert "access_token" in response.json()
 
+
+@pytest.mark.anyio
+async def test_login_with_invalid_credentials(client, sample_users):
+    user = (await sample_users(1))[0]
+    response = await client.post(
+        "/auth/login", data={"username": user["email"], "password": "invalid"}
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.anyio
+async def test_me(client, sample_users, access_tokens):
+    user = (await sample_users(1))[0]
+    token = (await access_tokens([user]))[0]
+    response = await client.get(
+        "/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json().get("email") == user.get("email")

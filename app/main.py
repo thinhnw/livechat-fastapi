@@ -4,6 +4,7 @@ from bson import ObjectId
 import uvicorn
 from fastapi import FastAPI, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
+from fastapi.security import OAuth2PasswordRequestForm
 
 from app import oauth2, schemas, utils
 from app.database import get_db, get_fs
@@ -55,16 +56,20 @@ async def register(
             "and one special character",
         )
     res = await db.users.insert_one(
-        {"email": payload.email, "password_hash": utils.hash(payload.password)}
+        {
+            "email": payload.email,
+            "password_hash": utils.hash(payload.password),
+        }
     )
     return {"user_id": str(res.inserted_id)}
 
 
 @app.post("/auth/login")
 async def login(
-    payload: schemas.UserLogin, db: AsyncIOMotorDatabase = Depends(get_db)
+    payload: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> schemas.Token:
-    user = await db.users.find_one({"email": payload.email})
+    user = await db.users.find_one({"email": payload.username})
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Credentials"
@@ -81,8 +86,22 @@ async def login(
 @app.get("/auth/me")
 async def me(
     user=Depends(oauth2.get_current_user),
-) -> schemas.UserResponse:
+) -> schemas.UserMeResponse:
     return user
+
+
+@app.put("/users/me/display_name")
+async def change_user_display_name(
+    payload: schemas.UserChangeDisplayName,
+    db=Depends(get_db),
+    user=Depends(oauth2.get_current_user),
+):
+    updated_result = await db.users.update_one(
+        {"_id": user.get("_id")}, {"$set": {"display_name": payload.display_name}}
+    )
+    if updated_result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="User not found or no changes made")
+    return {"message": "Display name updated successfully"}
 
 
 @app.put("/users/me/avatar")
@@ -101,6 +120,14 @@ async def change_user_avatar(
     if updated_result.modified_count == 0:
         raise HTTPException(status_code=404, detail="User not found or no changes made")
     return {"file_id": str(file_id)}
+
+
+@app.get("/users/{id}")
+async def get_user(id: str, db=Depends(get_db)) -> schemas.UserDisplayResponse:
+    user = await db.users.find_one({"_id": ObjectId(id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return schemas.UserDisplayResponse(display_name=user.get("display_name"))
 
 
 @app.get("/images/{id}")
