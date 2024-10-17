@@ -88,3 +88,17 @@ async def authorized_client(client, sample_users, access_tokens):
     access_token = (await access_tokens([user]))[0]
     client.headers = {**client.headers, "Authorization": f"Bearer {access_token}"}
     return {"client": client, "current_user": user, "access_token": access_token}
+
+
+@pytest.fixture
+async def get_direct_chat_room(testdb):
+    async def _direct_chat_room(user0, user1):
+        res = await testdb.chat_rooms.insert_one(
+            {
+                "type": "direct",
+                "user_ids": [str(user0["_id"]), str(user1["_id"])],
+            }
+        )
+        return await testdb.chat_rooms.find_one({"_id": res.inserted_id})
+
+    return _direct_chat_room

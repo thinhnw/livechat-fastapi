@@ -162,6 +162,23 @@ async def create_direct_chat_room(
     return schemas.ChatRoomResponse(**response)
 
 
+@app.post("/messages", status_code=status.HTTP_201_CREATED)
+async def create_message(
+    payload: schemas.MessageCreate,
+    db=Depends(get_db),
+    current_user=Depends(oauth2.get_current_user),
+) -> schemas.MessageResponse:
+    res = await db.messages.insert_one(
+        {
+            **payload.model_dump(),
+            "sender_id": current_user.get("_id"),
+        }
+    )
+
+    message = await db.messages.find_one({"_id": res.inserted_id})
+    return schemas.MessageResponse(**message)
+
+
 # exclude for prod later
 @app.post("/scripts/save_image")
 async def save_image(fs=Depends(get_fs)):
