@@ -137,6 +137,31 @@ async def show_image(id: str, fs=Depends(get_fs)):
     return StreamingResponse(BytesIO(image_bytes), media_type="image/jpeg")
 
 
+@app.post("/chat_rooms/direct", status_code=status.HTTP_201_CREATED)
+async def create_direct_chat_room(
+    payload: schemas.DirectChatRoomCreate,
+    db=Depends(get_db),
+    current_user=Depends(oauth2.get_current_user),
+) -> schemas.ChatRoomResponse:
+    if str(current_user.get("_id")) not in payload.users:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
+
+    res = await db.chat_rooms.insert_one(
+        {
+            "type": "direct",
+            "user_ids": [
+                ObjectId(payload.users[0]),
+                ObjectId(payload.users[1]),
+            ],
+        }
+    )
+
+    response = await db.chat_rooms.find_one({"_id": res.inserted_id})
+    return schemas.ChatRoomResponse(**response)
+
+
 # exclude for prod later
 @app.post("/scripts/save_image")
 async def save_image(fs=Depends(get_fs)):

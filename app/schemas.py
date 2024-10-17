@@ -40,6 +40,31 @@ class ChatRoomTypeEnum(str, Enum):
     GROUP = "group"
 
 
+class DirectChatRoomCreate(BaseModel):
+    users: list[str] = Field(..., min_length=2, max_length=2)
+
+
+class ChatRoomResponse(BaseModel):
+    id: str = Field(..., alias="_id")
+    type: ChatRoomTypeEnum
+    user_ids: list[str]
+
+    @field_validator('id', mode='before')
+    def validate_object_id(cls, value):
+        if isinstance(value, ObjectId):
+            return str(value)  # Convert to string if it's an ObjectId
+        return value
+
+    @field_validator('user_ids', mode='before')
+    def validate_user_ids(cls, value):
+        result = []
+        for user_id in value:
+            if isinstance(user_id, ObjectId):
+                result.append(str(user_id))
+            else:
+                result.append(user_id)
+        return result
+
 class Token(BaseModel):
     access_token: str
     token_type: str
