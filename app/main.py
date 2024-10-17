@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
+from io import BytesIO
+from bson import ObjectId
 import uvicorn
 from fastapi import FastAPI, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 
 from app import oauth2, schemas, utils
 from app.database import get_db, get_fs
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from datetime import datetime
-from gridfs import GridFS
 
 
 @asynccontextmanager
@@ -83,45 +85,39 @@ async def me(
     return user
 
 
-@app.put("/users/{id}/avatar")
-async def change_display_name(
+@app.put("/users/me/avatar")
+async def change_user_avatar(
     db=Depends(get_db),
     fs=Depends(get_fs),
     user=Depends(oauth2.get_current_user),
     file: UploadFile = File(...),
 ):
-    file_id = await fs.upload_from_stream(file.filename, file.file)
+    file_id = await fs.upload_from_stream(
+        file.filename, file.file, metadata={"content_type": file.content_type}
+    )
     updated_result = await db.users.update_one(
         {"_id": user.get("_id")}, {"$set": {"avatar_file_id": file_id}}
     )
     if updated_result.modified_count == 0:
         raise HTTPException(status_code=404, detail="User not found or no changes made")
-    print(str(file_id))
     return {"file_id": str(file_id)}
 
 
-@app.post("/chat_rooms")
-async def create_chat_room(
-    payload: schemas.ChatRoomCreate,
-    db=Depends(get_db),
-    user=Depends(oauth2.get_current_user),
-):
-    chat_room = await db.chat_rooms.insert_one(
-        {**payload.model_dump(), "users": [user.get("email")]}
-    )
-    return str(chat_room.inserted_id)
+@app.get("/images/{id}")
+async def show_image(id: str, fs=Depends(get_fs)):
+    grid_out = await fs.open_download_stream(ObjectId(id))
+    image_bytes = await grid_out.read()
+    return StreamingResponse(BytesIO(image_bytes), media_type="image/jpeg")
 
 
-@app.get("/chat_rooms")
-async def get_chat_rooms(
-    db=Depends(get_db),
-    user=Depends(oauth2.get_current_user),
-) -> list[schemas.ChatRoomResponse]:
-    print(user.get("email"))
-    chat_rooms = await db.chat_rooms.find(
-        {"users": {"$in": [user.get("email")]}}
-    ).to_list()
-    return chat_rooms
+# exclude for prod later
+@app.post("/scripts/save_image")
+async def save_image(fs=Depends(get_fs)):
+    with open("tests/sample_avatar.jpeg", "rb") as f:
+        file_id = await fs.upload_from_stream(
+            "sample_avatar.jpeg", f, metadata={"content_type": "image/jpeg"}
+        )
+    return str(file_id)
 
 
 if __name__ == "__main__":

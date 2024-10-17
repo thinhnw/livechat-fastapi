@@ -1,14 +1,12 @@
 import pytest
 from fastapi import status
 
-
 @pytest.mark.anyio
 async def test_change_avatar(client, sample_user, sample_user_token):
     file_path = "tests/sample_avatar.jpeg"
-    print(sample_user_token[0])
     with open(file_path, "rb") as f:
         response = await client.put(
-            f"/users/{sample_user.get('id')}/avatar",
+            f"/users/me/avatar",
             headers={"Authorization": f"Bearer {sample_user_token[0]}"},
             files={"file": f},
         )
@@ -21,3 +19,13 @@ async def test_change_avatar(client, sample_user, sample_user_token):
     )
     assert user.status_code == status.HTTP_200_OK
     assert user.json().get("avatar_file_id") == file_id
+
+
+# @pytest.mark.anyio
+# async def test_change_avatar_unauthorized(client, sample_user, sample_user_token):
+#     pass
+
+# @pytest.mark.anyio
+# async def test_change_avatar_invalid_file(client, sample_user, sample_user_token):
+#     pass
+
