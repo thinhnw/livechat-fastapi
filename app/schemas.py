@@ -47,6 +47,8 @@ class DirectChatRoomCreate(BaseModel):
 
 class ChatRoomResponse(BaseModel):
     id: str = Field(..., alias="_id")
+    name: str
+    avatar_url: str
     type: ChatRoomTypeEnum
     user_ids: list[str]
 
@@ -65,6 +67,9 @@ class ChatRoomResponse(BaseModel):
             else:
                 result.append(user_id)
         return result
+
+class ChatRoomsListResponse(BaseModel):
+    chat_rooms: list[ChatRoomResponse]
 
 
 class MessageCreate(BaseModel):

@@ -13,7 +13,7 @@ async def test_registration_with_valid_credentials(client, testdb):
     )
     assert response.status_code == status.HTTP_200_OK
     user = await testdb.users.find_one({"email": email})
-    assert user
+    assert "display_name" in user
 
 
 @pytest.mark.anyio
@@ -45,6 +45,12 @@ async def test_login_with_valid_credentials(client, sample_users):
     user = (await sample_users(1))[0]
     response = await client.post(
         "/auth/login", data={"username": user["email"], "password": password}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert "access_token" in response.json()
+
+    response = await client.post(
+        "/auth/login", json={"email": user["email"], "password": password}
     )
     assert response.status_code == status.HTTP_200_OK
     assert "access_token" in response.json()

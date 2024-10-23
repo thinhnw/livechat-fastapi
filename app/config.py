@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    api_url: str
     mongo_username: str
     mongo_password: str
     mongo_maindb: str
