@@ -4,6 +4,10 @@ from bson import ObjectId
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
 
+import pydantic
+
+from app import utils
+
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -19,7 +23,7 @@ class UserLogin(BaseModel):
     password: str
 
 
-class UserMeResponse(BaseModel):
+class UserResponse(BaseModel):
     id: str = Field(..., alias="_id")
     email: EmailStr
     display_name: str
@@ -31,9 +35,18 @@ class UserMeResponse(BaseModel):
             return str(value)  # Convert to string if it's an ObjectId
         return value
 
+    @pydantic.computed_field
+    @property
+    def avatar_url(self) -> str:
+        return utils.get_avatar_url(self.avatar_file_id, self.display_name)
+
 
 class UserDisplayResponse(BaseModel):
     display_name: str
+
+
+class UsersListResponse(BaseModel):
+    users: list[UserResponse]
 
 
 class ChatRoomTypeEnum(str, Enum):
@@ -42,7 +55,7 @@ class ChatRoomTypeEnum(str, Enum):
 
 
 class DirectChatRoomCreate(BaseModel):
-    users: list[str] = Field(..., min_length=2, max_length=2)
+    user_ids: list[str] = Field(..., min_length=2, max_length=2)
 
 
 class ChatRoomResponse(BaseModel):
@@ -67,6 +80,7 @@ class ChatRoomResponse(BaseModel):
             else:
                 result.append(user_id)
         return result
+
 
 class ChatRoomsListResponse(BaseModel):
     chat_rooms: list[ChatRoomResponse]

@@ -116,8 +116,8 @@ async def login(
 @app.get("/auth/me")
 async def me(
     user=Depends(oauth2.get_current_user),
-) -> schemas.UserMeResponse:
-    return user
+) -> schemas.UserResponse:
+    return schemas.UserResponse(**user)
 
 
 @app.put("/users/me/display_name")
@@ -152,6 +152,16 @@ async def change_user_avatar(
     return {"file_id": str(file_id)}
 
 
+@app.get("/users")
+async def search_users(
+    search: str = None, db=Depends(get_db)
+) -> schemas.UsersListResponse:
+    users = await db.users.find(
+        {"email": {"$regex": f"^{search}", "$options": "i"}}
+    ).to_list(length=10)
+    return {"users": [schemas.UserResponse(**user) for user in users]}
+
+
 @app.get("/users/{id}")
 async def get_user(id: str, db=Depends(get_db)) -> schemas.UserDisplayResponse:
     user = await db.users.find_one({"_id": ObjectId(id)})
@@ -173,34 +183,82 @@ async def create_direct_chat_room(
     db=Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ) -> schemas.ChatRoomResponse:
-    if str(current_user.get("_id")) not in payload.users:
+    if str(current_user.get("_id")) not in payload.user_ids:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
         )
-    res = await db.chat_rooms.insert_one(
+    user_ids = [ObjectId(payload.user_ids[0]), ObjectId(payload.user_ids[1])]
+    pipeline = [
         {
-            "type": "direct",
-            "user_ids": [
-                ObjectId(payload.users[0]),
-                ObjectId(payload.users[1]),
-            ],
+            "$match": {
+                "$expr": {
+                    "$and": [
+                        {
+                            "$setIsSubset": [user_ids, {"$ifNull": ["$user_ids", []]}]
+                        },  # Check if all my_user_ids are in user_ids
+                        {
+                            "$eq": [len(user_ids), {"$size": "$user_ids"}]
+                        },  # Ensure sizes are equal
+                    ]
+                }
+            }
         }
-    )
+    ]
+
+    existing_chat = await db.chat_rooms.aggregate(pipeline).to_list(length=None)
+    if len(existing_chat) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Chat room already exists"
+        )
+    res = await db.chat_rooms.insert_one({"type": "direct", "user_ids": user_ids})
 
     chat_partner_id = (
-        payload.users[0]
-        if payload.users[1] == current_user.get("_id")
-        else payload.users[1]
+        payload.user_ids[0]
+        if payload.user_ids[1] == current_user.get("_id")
+        else payload.user_ids[1]
     )
     chat_partner = await db.users.find_one({"_id": ObjectId(chat_partner_id)})
     response = await db.chat_rooms.find_one({"_id": res.inserted_id})
     return schemas.ChatRoomResponse(
         **response,
         name=chat_partner.get("display_name"),
-        avatar_url=settings.api_url
-        + "/images/"
-        + str(chat_partner.get("avatar_file_id")),
+        avatar_url=utils.get_avatar_url(
+            chat_partner.get("avatar_file_id"), chat_partner.get("display_name")
+        ),
     )
+
+
+@app.get("/chat_rooms/direct")
+async def get_direct_chat_room(
+    partner_id: str, db=Depends(get_db), current_user=Depends(oauth2.get_current_user)
+) -> schemas.ChatRoomResponse:
+    user_ids = [ObjectId(partner_id), ObjectId(current_user["_id"])]
+    pipeline = [
+        {
+            "$match": {
+                "$expr": {
+                    "$and": [
+                        {
+                            "$setIsSubset": [user_ids, {"$ifNull": ["$user_ids", []]}]
+                        },  # Check if all my_user_ids are in user_ids
+                        {
+                            "$eq": [len(user_ids), {"$size": "$user_ids"}]
+                        },  # Ensure sizes are equal
+                    ]
+                }
+            }
+        }
+    ]
+
+    chat_rooms = await db.chat_rooms.aggregate(pipeline).to_list(length=None)
+    if len(chat_rooms) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Chat room not found"
+        )
+    partner = await db.users.find_one({"_id": ObjectId(partner_id)})
+    name = partner.get("display_name")
+    avatar_url = utils.get_avatar_url(partner.get("avatar_file_id"), name)
+    return schemas.ChatRoomResponse(**chat_rooms[0], name=name, avatar_url=avatar_url)
 
 
 @app.get("/chat_rooms")
@@ -232,13 +290,9 @@ async def get_chat_rooms(
             if chat_room["users"][0].get("_id") == current_user.get("_id")
             else chat_room["users"][0].get("avatar_file_id")
         )
-        if avatar_file_id is not None:
-            print("FATAL", avatar_file_id is not None)
-            chat_room["avatar_url"] = settings.api_url + "/images/" + avatar_file_id
-        else:
-            chat_room["avatar_url"] = (
-                f"https://ui-avatars.com/api/?name={chat_room['name'].replace(' ', '+')}"
-            )
+        chat_room["avatar_url"] = utils.get_avatar_url(
+            avatar_file_id, chat_room["name"]
+        )
         chat_rooms.append(chat_room)
 
     return schemas.ChatRoomsListResponse(chat_rooms=chat_rooms)

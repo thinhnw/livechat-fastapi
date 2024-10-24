@@ -51,3 +51,14 @@ async def test_show_user(client, sample_users):
     assert response.status_code == status.HTTP_200_OK
     assert response.json().get("display_name") == user.get("display_name")
 
+
+
+@pytest.mark.anyio
+async def test_search_users(client, sample_users):
+    users = await sample_users(2)
+    response = await client.get("/users?search=user_0@")
+    assert response.status_code == status.HTTP_200_OK
+    search_users = response.json().get("users")
+    print(response.json())
+    assert len(search_users) == 1
+    assert search_users[0].get("email") == users[0].get("email")
