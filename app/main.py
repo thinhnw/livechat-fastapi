@@ -331,6 +331,7 @@ async def create_message(
     res = await db.messages.insert_one(
         {
             **payload.model_dump(),
+            "chat_room_id": ObjectId(payload.chat_room_id),
             "user_id": current_user.get("_id")
         }
     )
@@ -361,6 +362,7 @@ async def get_messages(
         {"$skip": skip},  # Skip the first (page - 1) * page_size messages
         {"$limit": page_size},  # Limit the number of results to page_size
     ]).to_list(length=page_size)
+    print(chat_room_id, messages)
     return schemas.MessagesListResponse(messages=messages)
 
 # exclude for prod later
