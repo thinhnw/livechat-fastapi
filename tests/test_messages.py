@@ -68,34 +68,34 @@ async def test_get_messages_in_direct_chat_room(
     assert messages[0].get("content") == "Message 1"
     assert messages[1].get("content") == "Message 0"
 
-# @pytest.mark.anyio
-# async def test_get_messages_in_chat_room_unauthorized(
-#     client, testdb, sample_users, access_tokens
-# ):
-#     users = await sample_users(3)
-#     access_tokens = await access_tokens(users)
-#     direct_chat_room = await testdb.chat_rooms.insert_one(
-#         {
-#             "type": "direct",
-#             "user_ids": [users[0]["_id"], users[1]["_id"]],
-#         }
-#     )
+@pytest.mark.anyio
+async def test_get_messages_in_chat_room_unauthorized(
+    client, testdb, sample_users, access_tokens
+):
+    users = await sample_users(3)
+    access_tokens = await access_tokens(users)
+    direct_chat_room = await testdb.chat_rooms.insert_one(
+        {
+            "type": "direct",
+            "user_ids": [users[0]["_id"], users[1]["_id"]],
+        }
+    )
 
-#     await testdb.messages.insert_many(
-#         [
-#             {
-#                 "content": f"Message {i}",
-#                 "chat_room_id": direct_chat_room.inserted_id,
-#                 "user_id": users[i % 2]["_id"],
-#                 "created_at": datetime.now(timezone.utc),
-#             }
-#             for i in range(2)
-#         ]
-#     )
+    await testdb.messages.insert_many(
+        [
+            {
+                "content": f"Message {i}",
+                "chat_room_id": direct_chat_room.inserted_id,
+                "user_id": users[i % 2]["_id"],
+                "created_at": datetime.now(timezone.utc),
+            }
+            for i in range(2)
+        ]
+    )
 
-#     client.headers = {"Authorization": f"Bearer {access_tokens[2]}"}
+    client.headers = {"Authorization": f"Bearer {access_tokens[2]}"}
 
-#     response = await client.get(
-#         f"/messages?chat_room_id={str(direct_chat_room.inserted_id)}"
-#     )
-#     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    response = await client.get(
+        f"/messages?chat_room_id={str(direct_chat_room.inserted_id)}"
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
