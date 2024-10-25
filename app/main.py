@@ -261,6 +261,30 @@ async def get_direct_chat_room(
     return schemas.ChatRoomResponse(**chat_rooms[0], name=name, avatar_url=avatar_url)
 
 
+@app.get("/chat_rooms/{id}")
+async def get_chat_room(
+    id: str, db=Depends(get_db), current_user=Depends(oauth2.get_current_user)
+) -> schemas.ChatRoomResponse:
+    chat_room = await db.chat_rooms.find_one({"_id": ObjectId(id)})
+    if not chat_room:
+        raise HTTPException(status_code=404, detail="Chat room not found")
+    if current_user.get("_id") not in chat_room.get("user_ids"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
+    if chat_room.get("type") == "direct":
+        partner_id = (
+            chat_room.get("user_ids")[0]
+            if chat_room.get("user_ids")[1] == current_user.get("_id")
+            else chat_room.get("user_ids")[1]
+        )
+        partner = await db.users.find_one({"_id": ObjectId(partner_id)})
+        name = partner.get("display_name")
+        avatar_url = utils.get_avatar_url(partner.get("avatar_file_id"), name)
+        return schemas.ChatRoomResponse(**chat_room, name=name, avatar_url=avatar_url)
+    return schemas.ChatRoomResponse(**chat_room)
+
+
 @app.get("/chat_rooms")
 async def get_chat_rooms(
     db=Depends(get_db), current_user=Depends(oauth2.get_current_user)
