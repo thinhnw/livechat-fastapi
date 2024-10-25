@@ -12,7 +12,7 @@ from app import oauth2, schemas, utils
 from app.database import get_db, get_fs
 from app.config import settings
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @asynccontextmanager
@@ -331,13 +331,37 @@ async def create_message(
     res = await db.messages.insert_one(
         {
             **payload.model_dump(),
-            "sender_id": current_user.get("_id"),
+            "user_id": current_user.get("_id")
         }
     )
 
     message = await db.messages.find_one({"_id": res.inserted_id})
     return schemas.MessageResponse(**message)
 
+
+@app.get("/messages")
+async def get_messages(
+    chat_room_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    db=Depends(get_db),
+    current_user=Depends(oauth2.get_current_user),
+) -> schemas.MessagesListResponse:
+    chat_room = await db.chat_rooms.find_one({"_id": ObjectId(chat_room_id)})
+    if not chat_room:
+        raise HTTPException(status_code=404, detail="Chat room not found")
+    if current_user.get("_id") not in chat_room.get("user_ids"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
+    skip = (page - 1) * page_size
+    messages = await db.messages.aggregate([
+        {"$match": {"chat_room_id": ObjectId(chat_room_id)}},  # Filter messages by chat room
+        {"$sort": {"created_at": -1}},  # Sort by timestamp in descending order
+        {"$skip": skip},  # Skip the first (page - 1) * page_size messages
+        {"$limit": page_size},  # Limit the number of results to page_size
+    ]).to_list(length=page_size)
+    return schemas.MessagesListResponse(messages=messages)
 
 # exclude for prod later
 @app.post("/scripts/save_image")

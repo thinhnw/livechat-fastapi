@@ -96,14 +96,17 @@ class MessageResponse(BaseModel):
     id: str = Field(..., alias="_id")
     content: str
     chat_room_id: str
-    sender_id: str
+    user_id: str
     created_at: datetime
 
-    @field_validator("id", "chat_room_id", "sender_id", mode="before")
+    @field_validator("id", "chat_room_id", "user_id", mode="before")
     def validate_object_id(cls, value):
         if isinstance(value, ObjectId):
             return str(value)  # Convert to string if it's an ObjectId
         return value
+    
+class MessagesListResponse(BaseModel):
+    messages: list[MessageResponse]
 
 
 class Token(BaseModel):
