@@ -115,7 +115,7 @@ async def get_direct_chat_room(testdb):
         res = await testdb.chat_rooms.insert_one(
             {
                 "type": "direct",
-                "user_ids": [str(user0["_id"]), str(user1["_id"])],
+                "user_ids": [user0["_id"], user1["_id"]],
             }
         )
         return await testdb.chat_rooms.find_one({"_id": res.inserted_id})

@@ -10,6 +10,8 @@ async def test_create_message(
     users = await sample_users(2)
     access_tokens = await access_tokens(users)
     direct_chat_room = await get_direct_chat_room(users[0], users[1])
+    print(direct_chat_room)
+    print(users[0])
 
     client.headers = {"Authorization": f"Bearer {access_tokens[0]}"}
     response = await client.post(
