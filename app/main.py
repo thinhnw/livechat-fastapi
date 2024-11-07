@@ -1,29 +1,41 @@
 from contextlib import asynccontextmanager
 from io import BytesIO
+import json
 from bson import ObjectId
 import uvicorn
-from fastapi import FastAPI, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import (
+    FastAPI,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 
 
 from app import oauth2, schemas, utils
+from app.connection_manager import ConnectionManager
 from app.database import get_db, get_fs
 from app.config import settings
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from datetime import datetime, timezone
 
+from app.redis import get_redis
+
+redis = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        db = await get_db()
-        await db.command("ping")
-        print("You successfully connected to MongoDB!")
-    except Exception as e:
-        print(e)
+    # on startup
     yield
+    # on shutdown
 
 
 app = FastAPI(lifespan=lifespan)
@@ -49,8 +61,31 @@ async def root():
 
 @app.get("/db")
 async def db_healthcheck(db: AsyncIOMotorDatabase = Depends(get_db)):
-    await db["healthcheck"].insert_one({"created_at": datetime.now()})
-    return {"message": "OK"}
+    try:
+        db = await get_db()
+        response = await db.command("ping")
+        if response:
+            return {"status": "MongoDB is running"}
+        else:
+            raise HTTPException(status_code=500, detail="MongoDB did not respond")
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error connecting to MongoDB: {str(e)}"
+        )
+
+
+@app.get("/redis")
+async def redis_healthcheck(redis=Depends(get_redis)):
+    try:
+        response = await redis.ping()
+        if response:
+            return {"status": "Redis is running"}
+        else:
+            raise HTTPException(status_code=500, detail="Redis did not respond")
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error connecting to Redis: {str(e)}"
+        )
 
 
 @app.post("/auth/register")
@@ -326,17 +361,26 @@ async def get_chat_rooms(
 async def create_message(
     payload: schemas.MessageCreate,
     db=Depends(get_db),
+    redis=Depends(get_redis),
     current_user=Depends(oauth2.get_current_user),
 ) -> schemas.MessageResponse:
+    chat_room = await db.chat_rooms.find_one({"_id": ObjectId(payload.chat_room_id)})
+    if current_user.get("_id") not in chat_room.get("user_ids"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
     res = await db.messages.insert_one(
         {
             **payload.model_dump(),
             "chat_room_id": ObjectId(payload.chat_room_id),
-            "user_id": current_user.get("_id")
+            "user_id": current_user.get("_id"),
         }
     )
 
     message = await db.messages.find_one({"_id": res.inserted_id})
+    redis.publish(
+        f"channels:{payload.chat_room_id}", json.dumps(message, default=str)
+    )
     return schemas.MessageResponse(**message)
 
 
@@ -356,14 +400,18 @@ async def get_messages(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
         )
     skip = (page - 1) * page_size
-    messages = await db.messages.aggregate([
-        {"$match": {"chat_room_id": ObjectId(chat_room_id)}},  # Filter messages by chat room
-        {"$sort": {"created_at": -1}},  # Sort by timestamp in descending order
-        {"$skip": skip},  # Skip the first (page - 1) * page_size messages
-        {"$limit": page_size},  # Limit the number of results to page_size
-    ]).to_list(length=page_size)
-    print(chat_room_id, messages)
+    messages = await db.messages.aggregate(
+        [
+            {
+                "$match": {"chat_room_id": ObjectId(chat_room_id)}
+            },  # Filter messages by chat room
+            {"$sort": {"created_at": -1}},  # Sort by timestamp in descending order
+            {"$skip": skip},  # Skip the first (page - 1) * page_size messages
+            {"$limit": page_size},  # Limit the number of results to page_size
+        ]
+    ).to_list(length=page_size)
     return schemas.MessagesListResponse(messages=messages)
+
 
 # exclude for prod later
 @app.post("/scripts/save_image")
@@ -373,6 +421,27 @@ async def save_image(fs=Depends(get_fs)):
             "sample_avatar.jpeg", f, metadata={"content_type": "image/jpeg"}
         )
     return str(file_id)
+
+
+manager = ConnectionManager()
+
+
+@app.websocket("/ws/chat_rooms/{chat_room_id}")
+async def websocket_endpoint(
+    websocket: WebSocket, chat_room_id: str, redis=Depends(get_redis)
+):
+    channel_id = f"chat_room_{chat_room_id}"
+    await manager.connect(websocket, channel_id)
+    pubsub = redis.pubsub()
+    await pubsub.subscribe(f"channels:{chat_room_id}")
+    try:
+        while True:
+            data = await pubsub.get_message(ignore_subscribe_messages=True)
+            await manager.broadcast(data, channel_id)
+    except WebSocketDisconnect:
+        print("Disconnecting...")
+        manager.disconnect(websocket, channel_id)
+        print("Disconnected")
 
 
 if __name__ == "__main__":

@@ -1,17 +1,73 @@
 services:
+
   mongo:
-    image: mongo
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - ../data:/data/db
+    networks:
+      - backend
+    env_file:
+      - mongo.env
+
+  # mongo2:
+  #   image: mongo:latest
+  #   container_name: mongo2
+  #   ports:
+  #     - "27018:27017"
+  #   volumes:
+  #     - .data/mongo2:/data/db
+  #   networks:
+  #     - backend
+  #   env_file: 
+  #     - mongo.env
+  #   command: ["mongod", "--replSet", "rs0", "--auth", "--port", "27017"]
+
+  # mongo3:
+  #   image: mongo:latest
+  #   container_name: mongo3
+  #   ports:
+  #     - "27019:27017"
+  #   volumes:
+  #     - .data/mongo3:/data/db
+  #   networks:
+  #     - backend
+  #   env_file:
+  #     - mongo.env
+  #   command: ["mongod", "--replSet", "rs0", "--auth", "--port", "27017"]
+
+  # mongo-init:
+  #   image: mongo:latest
+  #   container_name: mongo-init
+  #   depends_on:
+  #     - mongo1
+  #     - mongo2
+  #     - mongo3
+  #   networks:
+  #     - backend
+  #   env_file:
+  #     - mongo.env
+  #   command: >
+  #     bash -c "
+  #       sleep 10 &&
+  #       mongo --host mongo1:27017 -u ${MONGO_INITDB_ROOT_USERNAME} -p ${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin
+  #       --eval 'rs.initiate({ _id: \"rs0\", members: [ { _id: 0, host: \"mongo1:27017\" }, { _id: 1, host: \"mongo2:27017\" }, { _id: 2, host: \"mongo3:27017\" } ] });'
+  #     "
+
+  redis:
+    image: redis
     restart: always
     volumes:
-      - ../data:/data
-    networks:
-      - root_traefik
-      - backend
+      - .data/redis:/data 
     ports:
-      - 27017:27017
+      - 6379:6379
+    networks:
+      - backend
     env_file:
-      - db.env
-  
+      - redis.env
+    command: ["redis-server", "--requirepass", "$REDIS_PASSWORD"]
 
   app:
     build: 
@@ -22,6 +78,7 @@ services:
       - .:/app
     depends_on:
       - mongo
+      - redis
     networks:
       - root_traefik
       - backend
@@ -38,3 +95,4 @@ networks:
   root_traefik:
     external: true
   backend:
+    driver: bridge

@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     mongo_port: int = 27017
     jwt_secret: str
     jwt_algorithm: str = "HS256"
-    jwt_token_ttl: int = 24 * 60 * 60  # 24h
+    redis_host: str
+    redis_port: int
+    redis_password: str
 
     @property
     def mongo_uri(self):

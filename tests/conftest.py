@@ -1,4 +1,5 @@
 import pytest
+import aioredis
 from typing import AsyncGenerator
 from fastapi import status
 from motor.motor_asyncio import (
@@ -11,6 +12,8 @@ from app.config import settings
 from app.database import get_db, get_fs
 from app.main import app
 from httpx import ASGITransport, AsyncClient
+
+from app.redis import get_redis
 
 
 password = "Foobar1!"
@@ -34,19 +37,35 @@ async def testdb() -> AsyncGenerator[AsyncIOMotorDatabase, None]:
 async def testfs(testdb) -> AsyncGenerator[AsyncIOMotorGridFSBucket, None]:
     return AsyncIOMotorGridFSBucket(testdb)
 
+@pytest.fixture
+async def testredis():
+    redis = await aioredis.from_url(
+        f"redis://{settings.redis_host}:{settings.redis_port}",
+        password=settings.redis_password,
+        decode_responses=True,
+    )
+    try:
+        yield redis
+    finally:
+        await redis.close()
+
 
 @pytest.fixture()
-async def client(testdb, testfs):
+async def client(testdb, testfs, testredis):
     def override_get_db():
         return testdb
 
     def override_get_fs():
         return testfs
+    
+    def override_get_redis():
+        return testredis
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_fs] = override_get_fs
+    app.dependency_overrides[get_redis] = override_get_redis
 
-    yield AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    yield AsyncClient(transport=ASGITransport(app=app))
 
     app.dependency_overrides = {}
 

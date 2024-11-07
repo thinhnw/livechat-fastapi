@@ -9,10 +9,10 @@ from app.database import get_db
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-async def create_access_token(data: dict) -> str:
+async def create_access_token(data: dict, ttl_seconds: int = 24 * 60 * 60) -> str:
 
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(seconds=settings.jwt_token_ttl)
+    expire = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
     to_encode.update({"exp": expire})
     return jwt.encode(
         to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm
