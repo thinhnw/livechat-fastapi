@@ -65,7 +65,7 @@ async def client(testdb, testfs, testredis):
     app.dependency_overrides[get_fs] = override_get_fs
     app.dependency_overrides[get_redis] = override_get_redis
 
-    yield AsyncClient(transport=ASGITransport(app=app))
+    yield AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
     app.dependency_overrides = {}
 
