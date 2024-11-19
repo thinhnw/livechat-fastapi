@@ -56,18 +56,18 @@ services:
   #       --eval 'rs.initiate({ _id: \"rs0\", members: [ { _id: 0, host: \"mongo1:27017\" }, { _id: 1, host: \"mongo2:27017\" }, { _id: 2, host: \"mongo3:27017\" } ] });'
   #     "
 
-  redis:
-    image: redis
-    restart: always
-    volumes:
-      - .data/redis:/data 
-    ports:
-      - 6379:6379
-    networks:
-      - backend
-    env_file:
-      - redis.env
-    command: ["redis-server", "--requirepass", "$REDIS_PASSWORD"]
+  # redis:
+  #   image: redis
+  #   restart: always
+  #   volumes:
+  #     - .data/redis:/data 
+  #   ports:
+  #     - 6379:6379
+  #   networks:
+  #     - backend
+  #   env_file:
+  #     - redis.env
+  #   command: ["redis-server", "--requirepass", "$REDIS_PASSWORD"]
 
   app:
     build: 
@@ -78,17 +78,16 @@ services:
       - .:/app
     depends_on:
       - mongo
-      - redis
     networks:
       - root_traefik
       - backend
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.livechatfastapi.rule=Host(`livechat.thinhnw.site`)"
-      - "traefik.http.routers.livechatfastapi.entrypoints=websecure"
-      - "traefik.http.routers.livechatfastapi.tls=true"
-      - "traefik.http.routers.livechatfastapi.tls.certresolver=myresolver"
-      - "traefik.http.services.livechatfastapi.loadbalancer.server.port=8000"
+      - "traefik.http.routers.livechat_fastapi.rule=Host(`api.livechat.thinhnw.site`)"
+      - "traefik.http.routers.livechat_fastapi.entrypoints=websecure"
+      - "traefik.http.routers.livechat_fastapi.tls=true"
+      - "traefik.http.routers.livechat_fastapi.tls.certresolver=myresolver"
+      - "traefik.http.services.livechat_fastapi.loadbalancer.server.port=8000"
       - "traefik.docker.network=root_traefik"
 
 networks:

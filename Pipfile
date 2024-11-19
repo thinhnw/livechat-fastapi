@@ -10,7 +10,6 @@ motor = "*"
 passlib = {extras = ["brypt"], version = "*"}
 pyjwt = "*"
 pydantic-settings = "*"
-aioredis = "*"
 httpx-ws = "*"
 
 [dev-packages]

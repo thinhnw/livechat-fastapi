@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from io import BytesIO
 import json
-from bson import ObjectId
+from bson import ObjectId, json_util
 import uvicorn
 from fastapi import (
     FastAPI,
@@ -15,7 +15,6 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -25,10 +24,6 @@ from app.database import get_db, get_fs
 from app.config import settings
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from datetime import datetime, timezone
-
-from app.redis import get_redis
-
-redis = None
 
 
 @asynccontextmanager
@@ -43,6 +38,7 @@ app = FastAPI(lifespan=lifespan)
 origins = [
     "http://localhost",
     "http://localhost:5173",
+    "https://livechat-react.pages.dev"
 ]
 
 app.add_middleware(
@@ -71,20 +67,6 @@ async def db_healthcheck(db: AsyncIOMotorDatabase = Depends(get_db)):
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error connecting to MongoDB: {str(e)}"
-        )
-
-
-@app.get("/redis")
-async def redis_healthcheck(redis=Depends(get_redis)):
-    try:
-        response = await redis.ping()
-        if response:
-            return {"status": "Redis is running"}
-        else:
-            raise HTTPException(status_code=500, detail="Redis did not respond")
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error connecting to Redis: {str(e)}"
         )
 
 
@@ -358,17 +340,14 @@ async def get_chat_rooms(
 
 
 @app.post("/messages", status_code=status.HTTP_201_CREATED)
-async def create_message(
+async def post_message(
     payload: schemas.MessageCreate,
     db=Depends(get_db),
-    redis=Depends(get_redis),
     current_user=Depends(oauth2.get_current_user),
 ) -> schemas.MessageResponse:
     chat_room = await db.chat_rooms.find_one({"_id": ObjectId(payload.chat_room_id)})
     if current_user.get("_id") not in chat_room.get("user_ids"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     res = await db.messages.insert_one(
         {
             **payload.model_dump(),
@@ -378,9 +357,6 @@ async def create_message(
     )
 
     message = await db.messages.find_one({"_id": res.inserted_id})
-    redis.publish(
-        f"channels:{payload.chat_room_id}", json.dumps(message, default=str)
-    )
     return schemas.MessageResponse(**message)
 
 
@@ -388,7 +364,7 @@ async def create_message(
 async def get_messages(
     chat_room_id: str,
     page: int = 1,
-    page_size: int = 20,
+    page_size: int = 25,
     db=Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ) -> schemas.MessagesListResponse:
@@ -397,7 +373,7 @@ async def get_messages(
         raise HTTPException(status_code=404, detail="Chat room not found")
     if current_user.get("_id") not in chat_room.get("user_ids"):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden"
         )
     skip = (page - 1) * page_size
     messages = await db.messages.aggregate(
@@ -423,25 +399,65 @@ async def save_image(fs=Depends(get_fs)):
     return str(file_id)
 
 
+@app.post("/scripts/test_db")
+async def test_db(db=Depends(get_db)):
+    res = await db.users.find().to_list(length=10)
+    return res
+
+
 manager = ConnectionManager()
 
 
 @app.websocket("/ws/chat_rooms/{chat_room_id}")
 async def websocket_endpoint(
-    websocket: WebSocket, chat_room_id: str, redis=Depends(get_redis)
+    websocket: WebSocket, chat_room_id: str, db=Depends(get_db)
 ):
     channel_id = f"chat_room_{chat_room_id}"
     await manager.connect(websocket, channel_id)
-    pubsub = redis.pubsub()
-    await pubsub.subscribe(f"channels:{chat_room_id}")
     try:
         while True:
-            data = await pubsub.get_message(ignore_subscribe_messages=True)
-            await manager.broadcast(data, channel_id)
+            data = await websocket.receive_text()
+            data = json.loads(data)
+            if data["type"] == "auth":
+                current_user = await oauth2.get_current_user(data["token"], db)
+                print(current_user)
+            elif data["type"] == "message":
+                message = data["message"]
+                chat_room = await db.chat_rooms.find_one(
+                    {"_id": ObjectId(message.get("chat_room_id"))}
+                )
+                if current_user.get("_id") not in chat_room.get("user_ids"):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden"
+                    )
+                res = await db.messages.insert_one(
+                    {
+                        "content": message.get("content"),
+                        "chat_room_id": ObjectId(message.get("chat_room_id")),
+                        "user_id": current_user.get("_id"),
+                        "created_at": datetime.now(timezone.utc),
+                    }
+                )
+
+                message = await db.messages.find_one({"_id": res.inserted_id})
+                print(message)
+                await manager.broadcast(
+                    json_util.dumps(
+                        {
+                            "type": "message",
+                            "message": schemas.MessageResponse(**message).model_dump(by_alias=True),
+                        }
+                    ),
+                    channel_id,
+                )
     except WebSocketDisconnect:
-        print("Disconnecting...")
-        manager.disconnect(websocket, channel_id)
         print("Disconnected")
+    except HTTPException as e:
+        if e.status_code == status.HTTP_401_UNAUTHORIZED:
+            print("Unauthorized")
+            await websocket.close()
+    finally:
+        manager.disconnect(websocket, channel_id)
 
 
 if __name__ == "__main__":

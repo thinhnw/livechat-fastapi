@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Any
 from bson import ObjectId
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pydantic
 
@@ -89,7 +89,7 @@ class ChatRoomsListResponse(BaseModel):
 class MessageCreate(BaseModel):
     chat_room_id: str
     content: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class MessageResponse(BaseModel):
@@ -104,7 +104,14 @@ class MessageResponse(BaseModel):
         if isinstance(value, ObjectId):
             return str(value)  # Convert to string if it's an ObjectId
         return value
-    
+
+    class Config:
+        # This ensures the alias is respected during serialization
+        allow_population_by_field_name = True
+        # Use alias when serializing to JSON
+        json_encoders = {ObjectId: str}
+
+
 class MessagesListResponse(BaseModel):
     messages: list[MessageResponse]
 

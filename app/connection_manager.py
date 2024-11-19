@@ -11,7 +11,7 @@ class ConnectionManager:
             self.active_connections[channel_id] = []
         self.active_connections[channel_id].append(websocket)
 
-    async def disconnect(self, websocket: WebSocket, channel_id: str):
+    def disconnect(self, websocket: WebSocket, channel_id: str):
         self.active_connections[channel_id].remove(websocket)
         if not self.active_connections[channel_id]:
             self.active_connections.pop(channel_id)
